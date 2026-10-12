@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Soundscape - Interactive Response & Insights</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome for iconography -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .word-cloud-tag {
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            display: inline-block;
+        }
+        .word-cloud-tag:hover {
+            transform: scale(1.15) translateY(-2px);
+            z-index: 10;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md">
+                    <i class="fa-solid fa-comments-wave"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-900 leading-tight">ClassSound</h1>
+                    <p class="text-xs text-slate-500 hidden sm:block">Real-time Student Feedback & Visual Analytics</p>
+                </div>
+            </div>
+
+            <!-- View Switching Controls -->
+            <div class="flex items-center space-x-3">
+                <div class="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200">
+                    <button id="btn-student-view" onclick="switchView('student')" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 bg-white text-blue-600 shadow-sm">
+                        <i class="fa-solid fa-user-graduate"></i>
+                        <span>Student View</span>
+                    </button>
+                    <button id="btn-teacher-view" onclick="switchView('teacher')" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 text-slate-600 hover:text-slate-900">
+                        <i class="fa-solid fa-chalkboard-user"></i>
+                        <span>Teacher Dashboard</span>
+                    </button>
+                </div>
+                
+                <button onclick="loadSampleData()" class="px-3 py-1.5 text-xs font-semibold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors flex items-center space-x-1" title="Load Demo Data">
+                    <i class="fa-solid fa-database"></i>
+                    <span class="hidden md:inline">Demo Data</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2"></div>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- Active Question Banner (Visible to all) -->
+        <section class="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-6 text-white shadow-xl mb-8 relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl"></div>
+            <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                            <i class="fa-solid fa-circle-dot text-emerald-400 text-[10px] mr-1 animate-pulse"></i> Live Classroom Prompt
+                        </span>
+                        <span id="prompt-timestamp" class="text-xs text-slate-400">Updated 5m ago</span>
+                    </div>
+                    <h2 id="display-prompt" class="text-xl sm:text-2xl font-bold text-white leading-snug">
+                        What is the most critical factor driving climate change, and how can technology help mitigate it?
+                    </h2>
+                </div>
+                <div class="flex items-center space-x-3 self-start md:self-center">
+                    <div class="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 text-center">
+                        <div id="total-submissions-badge" class="text-2xl font-extrabold text-white">0</div>
+                        <div class="text-[10px] uppercase tracking-wider text-slate-300 font-medium">Responses</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= STUDENT VIEW SECTION ================= -->
+        <section id="student-view" class="space-y-8">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <!-- Submission Form Box -->
+                <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+                    <div class="border-b border-slate-100 pb-4">
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center">
+                            <i class="fa-solid fa-pen-to-square text-blue-600 mr-2"></i> Submit Your Thoughts
+                        </h3>
+                        <p class="text-sm text-slate-500">Your answer helps shape our live classroom discussion!</p>
+                    </div>
+
+                    <form id="student-form" onsubmit="handleStudentSubmit(event)" class="space-y-5">
+                        <!-- Identity Switcher -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-sm font-medium text-slate-700">Student Identity</label>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="anon-toggle" onchange="toggleAnonymous(this.checked)" class="sr-only peer">
+                                    <div class="relative w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                    <span class="ms-2 text-xs font-medium text-slate-600">Submit Anonymously</span>
+                                </label>
+                            </div>
+                            <input type="text" id="student-name" required placeholder="Enter your full name or nickname..." class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-800 placeholder-slate-400 text-sm transition-all">
+                        </div>
+
+                        <!-- Response Text Area -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Your Detailed Answer</label>
+                            <textarea id="student-answer" required rows="5" placeholder="Share your perspectives, arguments, or questions here..." class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-800 placeholder-slate-400 text-sm transition-all resize-none"></textarea>
+                        </div>
+
+                        <!-- Quick Reaction Tag Picker -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Add a Quick Reaction Tag</label>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="reaction-tag-selector">
+                                <button type="button" onclick="selectTag('Got it!')" class="tag-btn flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 hover:border-emerald-500 hover:bg-emerald-50 text-xs font-medium transition-all" data-tag="Got it!">
+                                    <span>💡</span> <span>Got it!</span>
+                                </button>
+                                <button type="button" onclick="selectTag('Confused')" class="tag-btn flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 hover:border-amber-500 hover:bg-amber-50 text-xs font-medium transition-all" data-tag="Confused">
+                                    <span>❓</span> <span>Confused</span>
+                                </button>
+                                <button type="button" onclick="selectTag('Need Example')" class="tag-btn flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 hover:border-blue-500 hover:bg-blue-50 text-xs font-medium transition-all" data-tag="Need Example">
+                                    <span>🔍</span> <span>Need Example</span>
+                                </button>
+                                <button type="button" onclick="selectTag('Creative Idea')" class="tag-btn flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 hover:border-purple-500 hover:bg-purple-50 text-xs font-medium transition-all" data-tag="Creative Idea">
+                                    <span>🚀</span> <span>Creative Idea</span>
+                                </button>
+                            </div>
+                            <input type="hidden" id="selected-tag" value="">
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-paper-plane"></i>
+                            <span>Send Response to Classroom</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Live Feed & Peer Insights Widget for Student View -->
+                <div class="lg:col-span-5 space-y-6">
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-full">
+                        <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                            <h3 class="text-md font-bold text-slate-900 flex items-center">
+                                <i class="fa-solid fa-bolt text-amber-500 mr-2"></i> Peer Response Stream
+                            </h3>
+                            <span class="text-xs text-slate-400">Live Feedback</span>
+                        </div>
+
+                        <!-- Scrollable list of recent responses -->
+                        <div id="student-feed-container" class="space-y-3 overflow-y-auto max-h-[380px] custom-scrollbar pr-1 flex-1">
+                            <div class="text-center py-10 text-slate-400 text-sm">
+                                <i class="fa-solid fa-inbox text-3xl mb-2 text-slate-300 block"></i>
+                                No responses submitted yet. Be the first to share your view!
+                            </div>
+                        </div>
+
+                        <!-- Quick Visual Snapshot for Student -->
+                        <div class="mt-4 pt-4 border-t border-slate-100">
+                            <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Class Word Highlights</h4>
+                            <div id="student-mini-cloud" class="flex flex-wrap gap-1.5">
+                                <span class="text-xs text-slate-400 italic">Submit responses to reveal class word cloud...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ================= TEACHER DASHBOARD SECTION ================= -->
+        <section id="teacher-view" class="space-y-8 hidden">
+            
+            <!-- Prompt Management Panel -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-md font-bold text-slate-900 flex items-center">
+                        <i class="fa-solid fa-sliders text-indigo-600 mr-2"></i> Prompt & Discussion Management
+                    </h3>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="clearAllData()" class="px-3 py-1.5 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors">
+                            <i class="fa-solid fa-trash-can mr-1"></i> Clear Responses
+                        </button>
+                        <button onclick="exportSummary()" class="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 transition-colors">
+                            <i class="fa-solid fa-download mr-1"></i> Export Summary
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input type="text" id="teacher-prompt-input" placeholder="Type a new question or discussion prompt..." class="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-800 text-sm">
+                    <button onclick="updatePrompt()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl transition-colors shadow-sm flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Update Prompt</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Analytics Dashboard Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Keyword & Word Cloud Column -->
+                <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                            <h3 class="text-md font-bold text-slate-900 flex items-center">
+                                <i class="fa-solid fa-cloud text-blue-500 mr-2"></i> Classroom Keyword Cloud
+                            </h3>
+                            <p class="text-xs text-slate-500">Most frequently mentioned terms and topics</p>
+                        </div>
+                        <button onclick="analyzeData()" class="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-semibold rounded-lg border border-blue-200 transition-colors flex items-center space-x-1">
+                            <i class="fa-solid fa-chart-pie"></i>
+                            <span>Re-Analyze</span>
+                        </button>
+                    </div>
+
+                    <!-- Visual Word Cloud Container -->
+                    <div id="word-cloud-container" class="min-h-[220px] bg-slate-50 rounded-xl p-6 flex flex-wrap items-center justify-center gap-3 border border-slate-200/60 text-center">
+                        <p class="text-slate-400 text-sm">Click "Re-Analyze" or add responses to generate word cloud.</p>
+                    </div>
+
+                    <!-- Top Keywords Table / Badges -->
+                    <div>
+                        <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Frequency Breakdown</h4>
+                        <div id="top-keywords-list" class="flex flex-wrap gap-2">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sentiment & Category Overview -->
+                <div class="lg:col-span-5 space-y-6">
+                    <!-- Sentiment Distribution Chart -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                        <h3 class="text-md font-bold text-slate-900 mb-1 flex items-center">
+                            <i class="fa-solid fa-face-smile text-amber-500 mr-2"></i> Sentiment & Tone Split
+                        </h3>
+                        <p class="text-xs text-slate-500 mb-4">Class confidence and response tone profile</p>
+                        <div class="h-48 relative">
+                            <canvas id="sentimentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts & Category Themes Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Theme Categorization -->
+                <div class="lg:col-span-6 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <h3 class="text-md font-bold text-slate-900 mb-1 flex items-center">
+                        <i class="fa-solid fa-layer-group text-purple-600 mr-2"></i> Automatic Theme Clusters
+                    </h3>
+                    <p class="text-xs text-slate-500 mb-4">Key themes aggregated from student entries</p>
+                    
+                    <div id="theme-clusters-container" class="space-y-3">
+                        <!-- Clustered items populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Response Length & Engagement Chart -->
+                <div class="lg:col-span-6 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <h3 class="text-md font-bold text-slate-900 mb-1 flex items-center">
+                        <i class="fa-solid fa-chart-column text-emerald-600 mr-2"></i> Reaction Tags & Answer Depth
+                    </h3>
+                    <p class="text-xs text-slate-500 mb-4">Distribution of student reaction flags</p>
+                    <div class="h-56 relative">
+                        <canvas id="tagsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Complete Response Table / Cards -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                    <div>
+                        <h3 class="text-md font-bold text-slate-900 flex items-center">
+                            <i class="fa-solid fa-list-check text-slate-700 mr-2"></i> All Student Submissions
+                        </h3>
+                        <p class="text-xs text-slate-500">Live unedited feed of classroom student entries</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="search-responses" oninput="filterResponses()" placeholder="Filter responses..." class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto mt-4">
+                    <table class="w-full text-left text-sm text-slate-600">
+                        <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 font-semibold">Student Name</th>
+                                <th scope="col" class="px-4 py-3 font-semibold">Response</th>
+                                <th scope="col" class="px-4 py-3 font-semibold">Reaction Tag</th>
+                                <th scope="col" class="px-4 py-3 font-semibold">Inferred Tone</th>
+                                <th scope="col" class="px-4 py-3 font-semibold">Time</th>
+                                <th scope="col" class="px-4 py-3 font-semibold text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="responses-table-body" class="divide-y divide-slate-100">
+                            <!-- Rows inserted dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer Section -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+            ClassSound &copy; Interactive Educational Analytics Platform. Empowering student voices in real time.
+        </div>
+    </footer>
+
+    <script>
+        // Global State Store
+        let state = {
+            currentPrompt: "What is the most critical factor driving climate change, and how can technology help mitigate it?",
+            responses: [],
+            activeView: 'student' // 'student' or 'teacher'
+        };
+
+        // Chart Instances
+        let sentimentChartInstance = null;
+        let tagsChartInstance = null;
+
+        // Sample Prepopulated Data
+        const sampleResponses = [
+            {
+                id: 1,
+                name: "Alex Johnson",
+                isAnonymous: false,
+                text: "Greenhouse gas emissions from fossil fuels are the primary driver. AI-driven smart grids and renewable energy storage technologies can hugely optimize power usage.",
+                tag: "Got it!",
+                timestamp: "2 mins ago"
+            },
+            {
+                id: 2,
+                name: "Anonymous Student",
+                isAnonymous: true,
+                text: "Deforestation and industrial agriculture release tons of carbon. Carbon capture tech and satellite monitoring of forests could help stop illegal logging.",
+                tag: "Creative Idea",
+                timestamp: "4 mins ago"
+            },
+            {
+                id: 3,
+                name: "Maria Garcia",
+                isAnonymous: false,
+                text: "I think carbon dioxide and methane emissions are most critical. Can someone explain how direct air capture technology actually scales economically?",
+                tag: "Need Example",
+                timestamp: "5 mins ago"
+            },
+            {
+                id: 4,
+                name: "Liam Chen",
+                isAnonymous: false,
+                text: "Over-consumption and industrial manufacturing. Battery technology innovation and solar cell efficiency will be key drivers of change.",
+                tag: "Got it!",
+                timestamp: "7 mins ago"
+            },
+            {
+                id: 5,
+                name: "Anonymous Student",
+                isAnonymous: true,
+                text: "I am a bit confused about whether renewable tech like solar panel manufacturing produces more carbon initially than it saves long term?",
+                tag: "Confused",
+                timestamp: "8 mins ago"
+            },
+            {
+                id: 6,
+                name: "Sophia Taylor",
+                isAnonymous: false,
+                text: "Transportation and heavy industry emissions. Electric vehicles, hydrogen energy, and smart urban public transportation systems can significantly lower emissions.",
+                tag: "Creative Idea",
+                timestamp: "10 mins ago"
+            },
+            {
+                id: 7,
+                name: "Noah Williams",
+                isAnonymous: false,
+                text: "Fossil fuel dependency for power generation. Solar energy, wind turbines, and smart power grids are vital solutions.",
+                tag: "Got it!",
+                timestamp: "12 mins ago"
+            },
+            {
+                id: 8,
+                name: "Emma Davis",
+                isAnonymous: false,
+                text: "Methane from livestock and agriculture. Agricultural biotechnology and synthetic meat substitutes could decrease carbon footprint.",
+                tag: "Creative Idea",
+                timestamp: "15 mins ago"
+            }
+        ];
+
+        // English Stop Words List for Text Extraction
+        const stopWords = new Set([
+            "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't", "as", "at", 
+            "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can", "can't", "cannot", 
+            "could", "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during", "each", "few", 
+            "for", "from", "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", 
+            "he's", "her", "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", 
+            "i'm", "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself", "let's", "me", "more", "most", 
+            "mustn't", "my", "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our", 
+            "ours", "ourselves", "out", "over", "own", "same", "shan't", "she", "she'd", "she'll", "she's", "should", 
+            "shouldn't", "so", "some", "such", "than", "that", "that's", "the", "their", "theirs", "them", "themselves", 
+            "then", "there", "there's", "these", "they", "they'd", "they'll", "they're", "they've", "this", "those", 
+            "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", 
+            "we've", "were", "weren't", "what", "what's", "when", "when's", "where", "where's", "which", "while", "who", 
+            "who's", "whom", "why", "why's", "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're", 
+            "you've", "your", "yours", "yourself", "yourselves", "think", "like", "also", "just", "could", "would", "help"
+        ]);
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSampleData();
+            initCharts();
+        });
+
+        // View Switcher Function
+        function switchView(view) {
+            state.activeView = view;
+            const studentSec = document.getElementById('student-view');
+            const teacherSec = document.getElementById('teacher-view');
+            const studentBtn = document.getElementById('btn-student-view');
+            const teacherBtn = document.getElementById('btn-teacher-view');
+
+            if (view === 'student') {
+                studentSec.classList.remove('hidden');
+                teacherSec.classList.add('hidden');
+                
+                studentBtn.className = "px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 bg-white text-blue-600 shadow-sm";
+                teacherBtn.className = "px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 text-slate-600 hover:text-slate-900";
+            } else {
+                studentSec.classList.add('hidden');
+                teacherSec.classList.remove('hidden');
+
+                teacherBtn.className = "px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 bg-white text-blue-600 shadow-sm";
+                studentBtn.className = "px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 text-slate-600 hover:text-slate-900";
+                
+                // Re-render teacher analytics on view switch
+                analyzeData();
+            }
+        }
+
+        // Anonymous Toggle
+        function toggleAnonymous(isAnon) {
+            const nameInput = document.getElementById('student-name');
+            if (isAnon) {
+                nameInput.value = "Anonymous Student";
+                nameInput.disabled = true;
+                nameInput.classList.add('bg-slate-100');
+            } else {
+                nameInput.value = "";
+                nameInput.disabled = false;
+                nameInput.classList.remove('bg-slate-100');
+            }
+        }
+
+        // Reaction Tag Picker
+        function selectTag(tag) {
+            document.getElementById('selected-tag').value = tag;
+            const buttons = document.querySelectorAll('.tag-btn');
+            buttons.forEach(btn => {
+                if (btn.getAttribute('data-tag') === tag) {
+                    btn.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'border-blue-300');
+                } else {
+                    btn.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'border-blue-300');
+                }
+            });
+        }
+
+        function handleStudentSubmit(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('student-name').value.trim();
+            const answerInput = document.getElementById('student-answer').value.trim();
+            const selectedTag = document.getElementById('selected-tag').value || 'Got it!';
+            const isAnon = document.getElementById('anon-toggle').checked;
+
+            if (!answerInput) {
+                showToast("Please write an answer before submitting.", "error");
+                return;
+            }
+
+            const newResponse = {
+                id: Date.now(),
+                name: isAnon ? "Anonymous Student" : (nameInput || "Student"),
+                isAnonymous: isAnon,
+                text: answerInput,
+                tag: selectedTag,
+                timestamp: "Just now"
+            };
+
+            state.responses.unshift(newResponse);
+            
+            // Reset form
+            document.getElementById('student-answer').value = "";
+            showToast("Your response has been published!", "success");
+
+            // Refresh Views
+            updateUI();
+            analyzeData();
+        }
+
+        // Load Sample Data
+        function loadSampleData() {
+            state.responses = [...sampleResponses];
+            showToast("Demo data loaded with " + sampleResponses.length + " responses.", "info");
+            updateUI();
+            analyzeData();
+        }
+
+        // Clear Data
+        function clearAllData() {
+            if (confirm("Are you sure you want to clear all student responses?")) {
+                state.responses = [];
+                updateUI();
+                analyzeData();
+                showToast("All responses cleared.", "info");
+            }
+        }
+
+        // Update Prompt
+        function updatePrompt() {
+            const input = document.getElementById('teacher-prompt-input');
+            if (input.value.trim()) {
+                state.currentPrompt = input.value.trim();
+                document.getElementById('display-prompt').textContent = state.currentPrompt;
+                document.getElementById('prompt-timestamp').textContent = "Updated just now";
+                input.value = "";
+                showToast("Classroom prompt updated!", "success");
+            }
+        }
+
+        // Refresh General UI Component State
+        function updateUI() {
+            // Update submission count badge
+            document.getElementById('total-submissions-badge').textContent = state.responses.length;
+
+            // Render Student Stream Feed
+            const feedContainer = document.getElementById('student-feed-container');
+            if (state.responses.length === 0) {
+                feedContainer.innerHTML = `
+                    <div class="text-center py-10 text-slate-400 text-sm">
+                        <i class="fa-solid fa-inbox text-3xl mb-2 text-slate-300 block"></i>
+                        No responses submitted yet. Be the first to share your view!
+                    </div>`;
+            } else {
+                feedContainer.innerHTML = state.responses.map(res => `
+                    <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-all text-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-bold text-slate-800 flex items-center">
+                                <i class="fa-solid ${res.isAnonymous ? 'fa-user-secret text-slate-400' : 'fa-circle-user text-blue-500'} mr-1.5"></i>
+                                ${escapeHtml(res.name)}
+                            </span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${getTagBadgeColor(res.tag)}">
+                                ${res.tag}
+                            </span>
+                        </div>
+                        <p class="text-slate-600 leading-relaxed">${escapeHtml(res.text)}</p>
+                        <div class="mt-2 text-[10px] text-slate-400 text-right">${res.timestamp}</div>
+                    </div>
+                `).join('');
+            }
+
+            // Render Teacher Table
+            renderTeacherTable(state.responses);
+        }
+
+        function renderTeacherTable(data) {
+            const tbody = document.getElementById('responses-table-body');
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400">No student responses available.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.map(res => {
+                const tone = inferTone(res.text, res.tag);
+                return `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-4 py-3 font-medium text-slate-800">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid ${res.isAnonymous ? 'fa-user-secret text-slate-400' : 'fa-user-graduate text-indigo-500'}"></i>
+                            <span>${escapeHtml(res.name)}</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${escapeHtml(res.text)}">
+                        ${escapeHtml(res.text)}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2.5 py-1 rounded-md text-xs font-medium ${getTagBadgeColor(res.tag)}">
+                            ${res.tag}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold ${tone.color}">
+                            ${tone.label}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-slate-400 text-xs">${res.timestamp}</td>
+                    <td class="px-4 py-3 text-right">
+                        <button onclick="deleteResponse(${res.id})" class="text-rose-500 hover:text-rose-700 px-2 py-1 text-xs">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function filterResponses() {
+            const query = document.getElementById('search-responses').value.toLowerCase();
+            const filtered = state.responses.filter(r => 
+                r.name.toLowerCase().includes(query) || 
+                r.text.toLowerCase().includes(query) ||
+                r.tag.toLowerCase().includes(query)
+            );
+            renderTeacherTable(filtered);
+        }
+
+        function deleteResponse(id) {
+            state.responses = state.responses.filter(r => r.id !== id);
+            updateUI();
+            analyzeData();
+            showToast("Response removed", "info");
+        }
+
+        function analyzeData() {
+            if (state.responses.length === 0) {
+                document.getElementById('word-cloud-container').innerHTML = `<p class="text-slate-400 text-sm">No responses submitted yet.</p>`;
+                document.getElementById('top-keywords-list').innerHTML = `<span class="text-xs text-slate-400">No keywords to extract.</span>`;
+                document.getElementById('student-mini-cloud').innerHTML = `<span class="text-xs text-slate-400 italic">No responses submitted yet.</span>`;
+                document.getElementById('theme-clusters-container').innerHTML = `<p class="text-xs text-slate-400">Awaiting student data...</p>`;
+                updateCharts({ Positive: 0, Inquisitive: 0, Critical: 0, Uncertain: 0 }, { 'Got it!': 0, 'Confused': 0, 'Need Example': 0, 'Creative Idea': 0 });
+                return;
+            }
+
+            // Extract words and frequency
+            const wordCounts = {};
+            state.responses.forEach(res => {
+                const words = res.text.toLowerCase()
+                    .replace(/[^a-zA-Z0-9\s]/g, '')
+                    .split(/\s+/);
+
+                words.forEach(word => {
+                    if (word.length > 2 && !stopWords.has(word)) {
+                        wordCounts[word] = (wordCounts[word] || 0) + 1;
+                    }
+                });
+            });
+
+            // Sort words by count
+            const sortedWords = Object.entries(wordCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 25);
+
+            // Render Word Cloud
+            renderWordCloud(sortedWords);
+
+            // Render Keywords Badges
+            renderKeywordsBadges(sortedWords.slice(0, 10));
+
+            // Perform Sentiment & Tone Analysis
+            const tones = { Positive: 0, Inquisitive: 0, Critical: 0, Uncertain: 0 };
+            const tagsCount = { 'Got it!': 0, 'Confused': 0, 'Need Example': 0, 'Creative Idea': 0 };
+
+            state.responses.forEach(res => {
+                const tone = inferTone(res.text, res.tag);
+                if (tones[tone.label] !== undefined) tones[tone.label]++;
+                if (tagsCount[res.tag] !== undefined) tagsCount[res.tag]++;
+            });
+
+            // Theme Clustering Analysis
+            generateThemeClusters(sortedWords);
+
+            // Update Dynamic Charts
+            updateCharts(tones, tagsCount);
+        }
+
+        // Render Cloud Tags
+        function renderWordCloud(words) {
+            const container = document.getElementById('word-cloud-container');
+            const studentMini = document.getElementById('student-mini-cloud');
+
+            if (words.length === 0) {
+                container.innerHTML = `<p class="text-slate-400 text-sm">Not enough data to form word cloud.</p>`;
+                return;
+            }
+
+            const maxFreq = Math.max(...words.map(w => w[1]));
+
+            // Color palette for cloud
+            const colors = ['text-blue-600', 'text-indigo-600', 'text-purple-600', 'text-emerald-600', 'text-amber-600', 'text-cyan-600'];
+
+            container.innerHTML = words.map(([word, freq], idx) => {
+                const sizeRatio = freq / maxFreq;
+                const fontSize = Math.max(0.8, sizeRatio * 2.2) + 'rem';
+                const opacity = Math.max(0.6, sizeRatio);
+                const color = colors[idx % colors.length];
+
+                return `<span class="word-cloud-tag ${color} font-bold px-2 py-1" style="font-size: ${fontSize}; opacity: ${opacity}" title="Mentioned ${freq} time(s)">
+                    ${escapeHtml(word)}
+                </span>`;
+            }).join('');
+
+            // Student Mini View
+            studentMini.innerHTML = words.slice(0, 8).map(([word]) => `
+                <span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md text-[11px] font-medium border border-blue-100">
+                    #${escapeHtml(word)}
+                </span>
+            `).join('');
+        }
+
+        // Keywords Badges Breakdown
+        function renderKeywordsBadges(words) {
+            const container = document.getElementById('top-keywords-list');
+            container.innerHTML = words.map(([word, count]) => `
+                <div class="px-3 py-1 bg-slate-100 border border-slate-200 rounded-xl flex items-center space-x-2 text-xs">
+                    <span class="font-semibold text-slate-700">${escapeHtml(word)}</span>
+                    <span class="px-1.5 py-0.5 bg-blue-600 text-white font-bold rounded-full text-[10px]">${count}</span>
+                </div>
+            `).join('');
+        }
+
+        // Generate Automatic Theme Clusters
+        function generateThemeClusters(topWords) {
+            const container = document.getElementById('theme-clusters-container');
+            
+            if (topWords.length < 3) {
+                container.innerHTML = `<p class="text-xs text-slate-400">Need more response data to cluster themes effectively.</p>`;
+                return;
+            }
+
+            const keyTerms = topWords.map(w => w[0]);
+
+            // Simple heuristic clustering based on key terms present in student responses
+            const themes = [
+                {
+                    title: "Energy & Grid Systems",
+                    icon: "fa-bolt",
+                    color: "bg-amber-50 text-amber-700 border-amber-200",
+                    keywords: ["energy", "power", "grid", "solar", "battery", "fossil", "renewable"]
+                },
+                {
+                    title: "Emissions & Agriculture",
+                    icon: "fa-leaf",
+                    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                    keywords: ["methane", "carbon", "agriculture", "forests", "deforestation", "emissions"]
+                },
+                {
+                    title: "Tech Innovation & Capture",
+                    icon: "fa-microchip",
+                    color: "bg-purple-50 text-purple-700 border-purple-200",
+                    keywords: ["tech", "technology", "ai", "capture", "vehicles", "electric", "hydrogen"]
+                }
+            ];
+
+            container.innerHTML = themes.map(theme => {
+                // Find matching student quotes
+                const matchingResponses = state.responses.filter(res => 
+                    theme.keywords.some(kw => res.text.toLowerCase().includes(kw))
+                );
+
+                return `
+                <div class="p-3.5 rounded-xl border ${theme.color} space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-xs flex items-center">
+                            <i class="fa-solid ${theme.icon} mr-1.5"></i> ${theme.title}
+                        </span>
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/80 border">
+                            ${matchingResponses.length} mention(s)
+                        </span>
+                    </div>
+                    <p class="text-xs opacity-90 leading-normal">
+                        ${matchingResponses.length > 0 ? `"${escapeHtml(matchingResponses[0].text.substring(0, 90))}..."` : 'No direct matches found.'}
+                    </p>
+                </div>
+                `;
+            }).join('');
+        }
+
+        // Infer Tone / Sentiment Rule Engine
+        function inferTone(text, tag) {
+            const lower = text.toLowerCase();
+            if (tag === 'Confused' || lower.includes('confused') || lower.includes("don't understand")) {
+                return { label: 'Uncertain', color: 'bg-amber-100 text-amber-800' };
+            } else if (tag === 'Need Example' || lower.includes('how') || lower.includes('?')) {
+                return { label: 'Inquisitive', color: 'bg-blue-100 text-blue-800' };
+            } else if (tag === 'Creative Idea' || lower.includes('could') || lower.includes('solution') || lower.includes('innovate')) {
+                return { label: 'Positive', color: 'bg-emerald-100 text-emerald-800' };
+            } else {
+                return { label: 'Critical', color: 'bg-indigo-100 text-indigo-800' };
+            }
+        }
+
+        function initCharts() {
+            // Sentiment Doughnut Chart
+            const ctxSentiment = document.getElementById('sentimentChart').getContext('2d');
+            sentimentChartInstance = new Chart(ctxSentiment, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Positive', 'Inquisitive', 'Critical', 'Uncertain'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#10b981', '#3b82f6', '#6366f1', '#f59e0b'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { boxWidth: 12, font: { size: 11 } }
+                        }
+                    },
+                    cutout: '70%'
+                }
+            });
+
+            // Reaction Tags Bar Chart
+            const ctxTags = document.getElementById('tagsChart').getContext('2d');
+            tagsChartInstance = new Chart(ctxTags, {
+                type: 'bar',
+                data: {
+                    labels: ['Got it!', 'Confused', 'Need Example', 'Creative Idea'],
+                    datasets: [{
+                        label: 'Student Count',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#a855f7'],
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function updateCharts(tones, tags) {
+            if (!sentimentChartInstance || !tagsChartInstance) return;
+
+            // Update Sentiment Chart
+            sentimentChartInstance.data.datasets[0].data = [
+                tones.Positive,
+                tones.Inquisitive,
+                tones.Critical,
+                tones.Uncertain
+            ];
+            sentimentChartInstance.update();
+
+            // Update Tags Chart
+            tagsChartInstance.data.datasets[0].data = [
+                tags['Got it!'],
+                tags['Confused'],
+                tags['Need Example'],
+                tags['Creative Idea']
+            ];
+            tagsChartInstance.update();
+        }
+
+        // Export Class Summary Function
+        function exportSummary() {
+            if (state.responses.length === 0) {
+                showToast("No response data to export.", "error");
+                return;
+            }
+
+            let summaryText = `CLASSROOM SOUNDSCAPE REPORT\n`;
+            summaryText += `Prompt: ${state.currentPrompt}\n`;
+            summaryText += `Total Responses: ${state.responses.length}\n`;
+            summaryText += `Date: ${new Date().toLocaleString()}\n`;
+            summaryText += `--------------------------------------------------\n\n`;
+
+            state.responses.forEach((r, idx) => {
+                summaryText += `${idx + 1}. [${r.name}] (${r.tag})\n`;
+                summaryText += `   "${r.text}"\n\n`;
+            });
+
+            const blob = new Blob([summaryText], { type: 'text/plain' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Classroom_Responses_${Date.now()}.txt`;
+            link.click();
+
+            showToast("Summary exported successfully!", "success");
+        }
+
+        // Utility: Toast Notification Component
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColors = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-rose-600 text-white',
+                info: 'bg-slate-800 text-white'
+            };
+
+            toast.className = `px-4 py-3 rounded-xl shadow-lg text-xs font-semibold flex items-center space-x-2 transition-all duration-300 transform translate-y-2 opacity-0 ${bgColors[type] || bgColors.info}`;
+            toast.innerHTML = `<i class="fa-solid fa-circle-info"></i><span>${escapeHtml(message)}</span>`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Utility: Badge Color Resolver
+        function getTagBadgeColor(tag) {
+            switch(tag) {
+                case 'Got it!': return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+                case 'Confused': return 'bg-amber-100 text-amber-800 border border-amber-200';
+                case 'Need Example': return 'bg-blue-100 text-blue-800 border border-blue-200';
+                case 'Creative Idea': return 'bg-purple-100 text-purple-800 border border-purple-200';
+                default: return 'bg-slate-100 text-slate-800 border border-slate-200';
+            }
+        }
+
+        // Utility: HTML Sanitizer
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
